@@ -4,6 +4,7 @@ import java.io.File;
 import java.util.Date;
 import java.util.List;
 import java.util.Properties;
+import java.util.Scanner;
 
 import org.kapott.hbci.GV.HBCIJob;
 import org.kapott.hbci.GV_Result.GVRKUms;
@@ -75,8 +76,10 @@ public class GlsFinTsService {
                     properties.getBankCode(), properties.getHost(), properties.getPort(), version.getId());
 
             try {
-                // Beim ersten Start synchronisiert hbci4j hier die System-ID und die Nutzerdaten (BPD/UPD).
-                // Dafür kann die Bank eine TAN-Verfahrenswahl oder Bestätigungen verlangen (siehe Callback).
+                // Beim ersten Start synchronisiert hbci4j hier die System-ID und die
+                // Nutzerdaten (BPD/UPD).
+                // Dafür kann die Bank eine TAN-Verfahrenswahl oder Bestätigungen verlangen
+                // (siehe Callback).
                 handler = new HBCIHandler(
                         version.getId(),
                         passport);
@@ -114,7 +117,7 @@ public class GlsFinTsService {
             saldoJob.setParam("my", konto);
             saldoJob.addToQueue();
 
-            HBCIJob umsatzJob = handler.newJob("KUmsAll");
+            HBCIJob umsatzJob = handler.newJob("KUmsAllCamt");
             umsatzJob.setParam("my", konto);
             umsatzJob.addToQueue();
 
@@ -316,12 +319,21 @@ public class GlsFinTsService {
                     }
                 }
 
-                case NEED_PT_DECOUPLED, NEED_PT_DECOUPLED_RETRY ->
-
+                case NEED_PT_DECOUPLED, NEED_PT_DECOUPLED_RETRY -> {
                     LOG.warn("Bitte Freigabe in der Banking-App bestätigen: {}", msg);
+                    System.out.println(">>> Freigabe in der Banking-App bestätigen und Enter drücken...");
+                    java.io.Console console = System.console();
+                    if (console != null) {
+                        console.readLine();
+                    } else {
+                        Scanner scanner = new Scanner(System.in);
+                        scanner.useDelimiter("\n");
+                        scanner.nextLine();
+                    }
+                    // Leer zurückgeben => hbci4j wartet intern auf App-Bestätigung
+                }
 
-                case NEED_NEW_INST_KEYS_ACK,
-                        NEED_INFOPOINT_ACK ->
+                case NEED_NEW_INST_KEYS_ACK ->
 
                     LOG.info("Bank-Hinweis bestätigt: {}", msg);
 

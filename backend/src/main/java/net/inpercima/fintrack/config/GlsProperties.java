@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class GlsProperties {
 
     private String bankCode = "43060967";
-    private String host = "fints1.atruvia.de";
+    private String host = "fints1.atruvia.de/cgi-bin/hbciservlet";
     private int port = 443;
     private String passportFile = "./data/gls-passport.dat";
     private String hbciversion = "300";
