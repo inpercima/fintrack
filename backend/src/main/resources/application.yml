@@ -32,3 +32,4 @@ app:
     port: ${GLS_FINTS_PORT:443}
     passport-file: ${GLS_PASSPORT_FILE:./data/gls-passport.dat}
     hbciversion: ${GLS_FINTS_VERSION:300}
+    log-level: ${GLS_FINTS_LOG_LEVEL:3}

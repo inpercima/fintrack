@@ -2,7 +2,7 @@ package net.inpercima.fintrack.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-@ConfigurationProperties(prefix = "gls")
+@ConfigurationProperties(prefix = "app.gls")
 public class GlsProperties {
 
     private String bankCode = "43060967";
@@ -10,6 +10,15 @@ public class GlsProperties {
     private int port = 443;
     private String passportFile = "./data/gls-passport.dat";
     private String hbciversion = "300";
+    private int logLevel = 3;
+
+    public int getLogLevel() {
+        return logLevel;
+    }
+
+    public void setLogLevel(int logLevel) {
+        this.logLevel = logLevel;
+    }
 
     public String getBankCode() {
         return bankCode;

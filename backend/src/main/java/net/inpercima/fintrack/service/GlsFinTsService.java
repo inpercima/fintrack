@@ -18,12 +18,16 @@ import org.kapott.hbci.passport.HBCIPassport;
 import org.kapott.hbci.status.HBCIExecStatus;
 import org.kapott.hbci.structures.Konto;
 import org.kapott.hbci.structures.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import net.inpercima.fintrack.config.GlsProperties;
 
 @Service
 public class GlsFinTsService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(GlsFinTsService.class);
 
     private final GlsProperties properties;
 
@@ -40,6 +44,8 @@ public class GlsFinTsService {
         }
 
         Properties props = new Properties();
+        // 1=error, 2=warn, 3=info, 4=debug. Higher levels may contain sensitive data.
+        props.setProperty("log.loglevel.default", String.valueOf(properties.getLogLevel()));
 
         HBCIUtils.init(
                 props,
@@ -64,14 +70,20 @@ public class GlsFinTsService {
             passport.setPort(properties.getPort());
             passport.setFilterType("Base64");
 
-            HBCIVersion version = HBCIVersion.HBCI_300;
+            HBCIVersion version = resolveVersion();
+            LOG.info("Initialisiere FinTS-Handler: bankCode={}, host={}, port={}, hbciVersion={}",
+                    properties.getBankCode(), properties.getHost(), properties.getPort(), version.getId());
 
             try {
+                // Beim ersten Start synchronisiert hbci4j hier die System-ID und die Nutzerdaten (BPD/UPD).
+                // Dafür kann die Bank eine TAN-Verfahrenswahl oder Bestätigungen verlangen (siehe Callback).
                 handler = new HBCIHandler(
                         version.getId(),
                         passport);
             } catch (Exception e) {
-                e.printStackTrace();
+                LOG.error("HBCIHandler konnte nicht erzeugt werden. Mögliche Ursachen: falsche Benutzerkennung/PIN, "
+                        + "für FinTS nicht freigeschaltener Zugang, fehlende TAN-Freigabe oder nicht unterstützte "
+                        + "HBCI-Version (aktuell {}). Log-Level über gls.log-level erhöhen.", version.getId(), e);
                 throw e;
             }
 
@@ -129,6 +141,17 @@ public class GlsFinTsService {
                 passport.close();
             }
         }
+    }
+
+    private HBCIVersion resolveVersion() {
+        String id = properties.getHbciversion();
+        HBCIVersion version = id == null ? null : HBCIVersion.byId(id.trim());
+        if (version == null) {
+            throw new IllegalStateException("Unbekannte HBCI-Version '" + id + "'. Erlaubt: "
+                    + java.util.Arrays.stream(HBCIVersion.values()).map(HBCIVersion::getId)
+                            .collect(java.util.stream.Collectors.joining(", ")));
+        }
+        return version;
     }
 
     private void printBalance(HBCIJob saldoJob) {
@@ -224,10 +247,15 @@ public class GlsFinTsService {
                 int level,
                 Date date,
                 StackTraceElement trace) {
-            /*
-             * FinTS kann hier sehr ausführliche Logs erzeugen.
-             * Für die erste Version geben wir sie nicht aus.
-             */
+            if (msg == null) {
+                return;
+            }
+            switch (level) {
+                case HBCIUtils.LOG_ERR -> LOG.error("hbci4j: {}", msg);
+                case HBCIUtils.LOG_WARN -> LOG.warn("hbci4j: {}", msg);
+                case HBCIUtils.LOG_INFO -> LOG.info("hbci4j: {}", msg);
+                default -> LOG.debug("hbci4j: {}", msg);
+            }
         }
 
         @Override
@@ -266,14 +294,51 @@ public class GlsFinTsService {
                             retData,
                             credentials.userId());
 
+                case NEED_PT_SECMECH -> {
+                    // Format: "<code>:<Name>|<code>:<Name>"; das erste angebotene Verfahren wählen.
+                    LOG.info("Bank bietet TAN-Verfahren an: {}", retData);
+                    String first = retData.toString().split("\\|")[0];
+                    replace(retData, first.split(":")[0]);
+                }
+
+                case NEED_PT_TANMEDIA ->
+
+                    LOG.info("Bank fragt nach TAN-Medium: {}", msg);
+
+                case NEED_PT_TAN -> {
+                    LOG.warn("Bank verlangt eine TAN: {}", msg);
+                    java.io.Console console = System.console();
+                    if (console != null) {
+                        replace(retData, console.readLine("TAN: "));
+                    } else {
+                        throw new IllegalStateException(
+                                "Die Bank verlangt eine TAN, aber es ist keine Konsole verfügbar.");
+                    }
+                }
+
+                case NEED_PT_DECOUPLED, NEED_PT_DECOUPLED_RETRY ->
+
+                    LOG.warn("Bitte Freigabe in der Banking-App bestätigen: {}", msg);
+
+                case NEED_NEW_INST_KEYS_ACK,
+                        NEED_INFOPOINT_ACK ->
+
+                    LOG.info("Bank-Hinweis bestätigt: {}", msg);
+
+                case HAVE_INST_MSG ->
+
+                    LOG.info("Nachricht der Bank: {}", msg);
+
+                case WRONG_PIN ->
+
+                    LOG.error("Die PIN wurde von der Bank abgelehnt.");
+
                 case HAVE_ERROR ->
 
-                    System.err.println(
-                            "FinTS: " + msg);
+                    LOG.error("FinTS: {}", msg);
 
-                default -> {
-                    // Keine weitere Eingabe erforderlich.
-                }
+                default ->
+                    LOG.debug("Unbehandelter Callback-Grund {}: {}", reason, msg);
             }
         }
 
