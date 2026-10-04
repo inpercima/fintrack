@@ -31,20 +31,27 @@ public class GlsFinTsService {
         this.properties = properties;
     }
 
-    public void readAccount() throws Exception {
-        validateConfiguration();
-
+    public void readAccount(GlsCredentials credentials) throws Exception {
         File passportFile = new File(properties.getPassportFile());
+
         File parent = passportFile.getParentFile();
         if (parent != null) {
             parent.mkdirs();
         }
 
         Properties props = new Properties();
-        HBCIUtils.init(props, new GlsCallback());
 
-        HBCIUtils.setParam("client.passport.default", "PinTan");
-        HBCIUtils.setParam("client.passport.PinTan.init", "1");
+        HBCIUtils.init(
+                props,
+                new GlsCallback(credentials));
+
+        HBCIUtils.setParam(
+                "client.passport.default",
+                "PinTan");
+
+        HBCIUtils.setParam(
+                "client.passport.PinTan.init",
+                "1");
 
         HBCIPassport passport = null;
         HBCIHandler handler = null;
@@ -58,12 +65,21 @@ public class GlsFinTsService {
             passport.setFilterType("Base64");
 
             HBCIVersion version = HBCIVersion.HBCI_300;
-            handler = new HBCIHandler(version.getId(), passport);
+
+            try {
+                handler = new HBCIHandler(
+                        version.getId(),
+                        passport);
+            } catch (Exception e) {
+                e.printStackTrace();
+                throw e;
+            }
 
             Konto[] accounts = passport.getAccounts();
 
             if (accounts == null || accounts.length == 0) {
-                throw new IllegalStateException("GLS hat keine Konten für diesen Zugang geliefert.");
+                throw new IllegalStateException(
+                        "GLS hat keine Konten für diesen Zugang geliefert.");
             }
 
             System.out.println();
@@ -91,12 +107,14 @@ public class GlsFinTsService {
             umsatzJob.addToQueue();
 
             System.out.println();
-            System.out.println("Frage Kontostand und Umsätze bei der GLS ab ...");
+            System.out.println(
+                    "Frage Kontostand und Umsätze bei der GLS ab ...");
 
             HBCIExecStatus status = handler.execute();
 
             if (!status.isOK()) {
-                throw new IllegalStateException("FinTS-Kommunikation fehlgeschlagen: " + status);
+                throw new IllegalStateException(
+                        "FinTS-Kommunikation fehlgeschlagen: " + status);
             }
 
             printBalance(saldoJob);
@@ -106,6 +124,7 @@ public class GlsFinTsService {
             if (handler != null) {
                 handler.close();
             }
+
             if (passport != null) {
                 passport.close();
             }
@@ -116,16 +135,22 @@ public class GlsFinTsService {
         GVRSaldoReq result = (GVRSaldoReq) saldoJob.getJobResult();
 
         if (!result.isOK()) {
-            System.err.println("Kontostand konnte nicht abgerufen werden: " + result);
+            System.err.println(
+                    "Kontostand konnte nicht abgerufen werden: " + result);
             return;
         }
 
-        if (result.getEntries() == null || result.getEntries().length == 0) {
-            System.out.println("Kontostand: keine Daten");
+        if (result.getEntries() == null
+                || result.getEntries().length == 0) {
+
+            System.out.println(
+                    "Kontostand: keine Daten");
+
             return;
         }
 
         Value value = result.getEntries()[0].ready.value;
+
         System.out.println();
         System.out.println("=== Kontostand ===");
         System.out.println(value);
@@ -135,7 +160,8 @@ public class GlsFinTsService {
         GVRKUms result = (GVRKUms) umsatzJob.getJobResult();
 
         if (!result.isOK()) {
-            System.err.println("Umsätze konnten nicht abgerufen werden: " + result);
+            System.err.println(
+                    "Umsätze konnten nicht abgerufen werden: " + result);
             return;
         }
 
@@ -145,46 +171,63 @@ public class GlsFinTsService {
         System.out.println("=== Letzte Umsätze ===");
 
         if (transactions == null || transactions.isEmpty()) {
-            System.out.println("Keine Umsätze geliefert.");
+            System.out.println(
+                    "Keine Umsätze geliefert.");
             return;
         }
 
         for (UmsLine transaction : transactions) {
+
             StringBuilder line = new StringBuilder();
 
-            line.append(safe(transaction.valuta));
+            line.append(
+                    safe(transaction.valuta));
 
             if (transaction.value != null) {
-                line.append(" | ").append(transaction.value);
+                line.append(" | ")
+                        .append(transaction.value);
             }
-            if (transaction.usage != null && !transaction.usage.isEmpty()) {
-                line.append(" | ").append(String.join(" ", transaction.usage));
+
+            if (transaction.usage != null
+                    && !transaction.usage.isEmpty()) {
+
+                line.append(" | ")
+                        .append(
+                                String.join(
+                                        " ",
+                                        transaction.usage));
             }
 
             System.out.println(line);
         }
     }
 
-    private void validateConfiguration() {
-        if (properties.getUserId() == null || properties.getUserId().isBlank()) {
-            throw new IllegalStateException("GLS_USER_ID fehlt.");
-        }
-
-        if (properties.getPin() == null || properties.getPin().isBlank()) {
-            throw new IllegalStateException("GLS_PIN fehlt.");
-        }
-    }
-
     private static String safe(Object value) {
-        return value == null ? "" : value.toString();
+        return value == null
+                ? ""
+                : value.toString();
     }
 
-    private class GlsCallback extends AbstractHBCICallback {
+    private class GlsCallback
+            extends AbstractHBCICallback {
+
+        private final GlsCredentials credentials;
+
+        private GlsCallback(
+                GlsCredentials credentials) {
+            this.credentials = credentials;
+        }
 
         @Override
-        public void log(String msg, int level, Date date, StackTraceElement trace) {
-            // FinTS-Protokoll kann sehr ausführlich sein. Für den ersten Test
-            // geben wir es nicht komplett auf stdout aus.
+        public void log(
+                String msg,
+                int level,
+                Date date,
+                StackTraceElement trace) {
+            /*
+             * FinTS kann hier sehr ausführliche Logs erzeugen.
+             * Für die erste Version geben wir sie nicht aus.
+             */
         }
 
         @Override
@@ -196,38 +239,64 @@ public class GlsFinTsService {
                 StringBuffer retData) {
 
             switch (reason) {
-                case NEED_PASSPHRASE_LOAD, NEED_PASSPHRASE_SAVE ->
-                    replace(retData, properties.getPassportPassword());
+
+                case NEED_PASSPHRASE_LOAD,
+                        NEED_PASSPHRASE_SAVE ->
+
+                    replace(
+                            retData,
+                            credentials.passportPassword());
 
                 case NEED_PT_PIN ->
-                    replace(retData, properties.getPin());
+
+                    replace(
+                            retData,
+                            credentials.pin());
 
                 case NEED_BLZ ->
-                    replace(retData, properties.getBankCode());
 
-                case NEED_USERID ->
-                    replace(retData, properties.getUserId());
+                    replace(
+                            retData,
+                            properties.getBankCode());
 
-                case NEED_CUSTOMERID ->
-                    replace(retData, properties.getUserId());
+                case NEED_USERID,
+                        NEED_CUSTOMERID ->
+
+                    replace(
+                            retData,
+                            credentials.userId());
 
                 case HAVE_ERROR ->
-                    System.err.println("FinTS: " + msg);
+
+                    System.err.println(
+                            "FinTS: " + msg);
 
                 default -> {
-                    // Für die reine Leseabfrage benötigen wir zunächst
-                    // keine weiteren Eingaben.
+                    // Keine weitere Eingabe erforderlich.
                 }
             }
         }
 
         @Override
-        public void status(HBCIPassport passport, int statusTag, Object[] data) {
-            // Noch keine spezielle Statusanzeige.
+        public void status(
+                HBCIPassport passport,
+                int statusTag,
+                Object[] data) {
+            /*
+             * Für die erste Version benötigen wir
+             * noch keine spezielle Statusanzeige.
+             */
         }
 
-        private void replace(StringBuffer target, String value) {
-            target.replace(0, target.length(), value == null ? "" : value);
+        private void replace(
+                StringBuffer target,
+                String value) {
+            target.replace(
+                    0,
+                    target.length(),
+                    value == null
+                            ? ""
+                            : value);
         }
     }
 }

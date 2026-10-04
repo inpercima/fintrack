@@ -1,5 +1,7 @@
 package net.inpercima.fintrack.runner;
 
+import net.inpercima.fintrack.service.GlsCredentialPrompt;
+import net.inpercima.fintrack.service.GlsCredentials;
 import net.inpercima.fintrack.service.GlsFinTsService;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
@@ -7,14 +9,20 @@ import org.springframework.stereotype.Component;
 @Component
 public class GlsRunner implements CommandLineRunner {
 
-    private final GlsFinTsService service;
+    private final GlsCredentialPrompt credentialPrompt;
+    private final GlsFinTsService glsFinTsService;
 
-    public GlsRunner(GlsFinTsService service) {
-        this.service = service;
+    public GlsRunner(
+            GlsCredentialPrompt credentialPrompt,
+            GlsFinTsService glsFinTsService) {
+        this.credentialPrompt = credentialPrompt;
+        this.glsFinTsService = glsFinTsService;
     }
 
     @Override
     public void run(String... args) throws Exception {
-        service.readAccount();
+        GlsCredentials credentials = credentialPrompt.requestCredentials();
+
+        glsFinTsService.readAccount(credentials);
     }
 }

@@ -28,10 +28,7 @@ spring:
 app:
   gls:
     bank-code: ${GLS_BANK_CODE:43060967}
-    user-id: ${GLS_USER_ID:}
-    pin: ${GLS_PIN:}
     host: ${GLS_FINTS_HOST:fints1.atruvia.de}
     port: ${GLS_FINTS_PORT:443}
     passport-file: ${GLS_PASSPORT_FILE:./data/gls-passport.dat}
-    passport-password: ${GLS_PASSPORT_PASSWORD:change-me-local-only}
     hbciversion: ${GLS_FINTS_VERSION:300}
