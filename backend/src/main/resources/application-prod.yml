@@ -1,0 +1,11 @@
+#
+# APPLICATION CONFIG PROD
+#
+
+spring:
+  datasource:
+    password: <PASSWORD_ON_SERVER_ONLY>
+    url: jdbc:mysql://mysql/fintrack?useUnicode=true&characterEncoding=utf8&useSSL=false
+    username: <USERNAME_ON_SERVER_ONLY>
+  main:
+    banner-mode: "off"
